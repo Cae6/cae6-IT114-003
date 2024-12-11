@@ -5,15 +5,27 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import Project.Client.Interfaces.ITimeEvents;
 
-
+import Project.Client.Interfaces.IClientEvents;
+import Project.Client.Interfaces.IConnectionEvents;
+import Project.Client.Interfaces.IMessageEvents;
+import Project.Client.Interfaces.IPhaseEvent;
+import Project.Client.Interfaces.IPointsEvent;
+import Project.Client.Interfaces.IReadyEvent;
+import Project.Client.Interfaces.IRoomEvents;
+import Project.Client.Interfaces.ITurnEvent;
+import Project.Client.Interfaces.IEliminatedEvent;
 import Project.Common.ConnectionPayload;
+import Project.Common.Constants;
+import Project.Common.EliminatedPayload;
 import Project.Common.LoggerUtil;
 import Project.Common.Payload;
 import Project.Common.PayloadType;
@@ -24,11 +36,14 @@ import Project.Common.PointsPayload;
 import Project.Common.TextFX;
 import Project.Common.TurnPayload;
 import Project.Common.TextFX.Color;
+import Project.Common.TimerPayload;
+import Project.Common.TimerType;
 
 /**
  * Demoing bi-directional communication between client and server in a
  * multi-client scenario
  */
+
 public enum Client {
     INSTANCE;
 
@@ -64,13 +79,16 @@ public enum Client {
     // other constants
     private final String READY = "ready";
     
-
+ private static List<IClientEvents> events = new ArrayList<IClientEvents>();
     // needs to be private now that the enum logic is handling this
     private Client() {
         LoggerUtil.INSTANCE.info("Client Created");
         myData = new ClientPlayer();
     }
 
+    public void addCallback(IClientEvents e) {
+        events.add(e);
+    }
     public boolean isConnected() {
         if (server == null) {
             return false;
@@ -106,6 +124,28 @@ public enum Client {
         }
         return isConnected();
     }
+
+    public boolean connect(String address, int port, String username, IClientEvents callback) {
+        myData.setClientName(username);
+        addCallback(callback);
+        try {
+            server = new Socket(address, port);
+            // channel to send to server
+            out = new ObjectOutputStream(server.getOutputStream());
+            // channel to listen to server
+            in = new ObjectInputStream(server.getInputStream());
+            LoggerUtil.INSTANCE.info("Client connected");
+            // Use CompletableFuture to run listenToServer() in a separate thread
+            CompletableFuture.runAsync(this::listenToServer);
+            sendClientName();
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return isConnected();
+    }
+
 
     /**
      * <p>
@@ -234,15 +274,27 @@ public enum Client {
         return false;
     }
 
+    
+
     // send methods to pass data to the ServerThread
 
     /**
      * Sends the client's intent to be ready.
      * Can also be used to toggle the ready state if coded on the server-side
      */
+    public long getMyClientId() {
+        return myData.getClientId();
+    }
 
-
-     public void sendTurnAction(String choice)  {
+  public void clientSideGameEvent(String str) {
+        events.forEach(event -> {
+            if (event instanceof IMessageEvents) {
+                // Note: using -2 to target GameEventPanel
+                ((IMessageEvents) event).onMessageReceive(Constants.GAME_EVENT_CHANNEL, str);
+            }
+        });
+    }
+     public void sendTurnAction(String choice) throws IOException  {
         TurnPayload tp = new TurnPayload();
         tp.setPayloadType(PayloadType.TURN);
         tp.setChoice(choice);
@@ -251,7 +303,7 @@ public enum Client {
 
 
    
-    private void sendReady() {
+    public void sendReady() throws IOException {
         ReadyPayload rp = new ReadyPayload();
         rp.setReady(true); // <- techically not needed as we'll use the payload type as a trigger
         send(rp);
@@ -262,7 +314,7 @@ public enum Client {
      * 
      * @param roomQuery optional partial match search String
      */
-    private void sendListRooms(String roomQuery) {
+    public void sendListRooms(String roomQuery)throws IOException   {
         Payload p = new Payload();
         p.setPayloadType(PayloadType.ROOM_LIST);
         p.setMessage(roomQuery);
@@ -274,7 +326,7 @@ public enum Client {
      * 
      * @param room
      */
-    private void sendCreateRoom(String room) {
+    public void sendCreateRoom(String room) throws IOException {
         Payload p = new Payload();
         p.setPayloadType(PayloadType.ROOM_CREATE);
         p.setMessage(room);
@@ -286,7 +338,7 @@ public enum Client {
      * 
      * @param room
      */
-    private void sendJoinRoom(String room) {
+    public void sendJoinRoom(String room)throws IOException  {
         Payload p = new Payload();
         p.setPayloadType(PayloadType.ROOM_JOIN);
         p.setMessage(room);
@@ -296,7 +348,7 @@ public enum Client {
     /**
      * Tells the server-side we want to disconnect
      */
-    private void sendDisconnect() {
+    void sendDisconnect() throws IOException  {
         Payload p = new Payload();
         p.setPayloadType(PayloadType.DISCONNECT);
         send(p);
@@ -307,7 +359,7 @@ public enum Client {
      * 
      * @param message
      */
-    private void sendMessage(String message) {
+    public void sendMessage(String message) throws IOException{
         Payload p = new Payload();
         p.setPayloadType(PayloadType.MESSAGE);
         p.setMessage(message);
@@ -483,7 +535,7 @@ public enum Client {
                     break;
                 case PayloadType.ROOM_LIST:
                     RoomResultsPayload rrp = (RoomResultsPayload) payload;
-                    processRoomsList(rrp.getRooms());
+                    processRoomsList(rrp.getRooms(), rrp.getMessage());
                     break;
                 case PayloadType.MESSAGE: // displays a received message
                     processMessage(payload.getClientId(), payload.getMessage());
@@ -511,6 +563,13 @@ public enum Client {
                 PointsPayload pp = (PointsPayload) payload;
                 processPoints(pp.getClientId(), pp.getPoints());
                 break;
+                case PayloadType.TIME:
+                TimerPayload timerPayload = (TimerPayload) payload;
+                processCurrentTimer(timerPayload.getTimerType(), timerPayload.getTime());
+                break;
+                case PayloadType.ELIMINATED:
+                EliminatedPayload ep = (EliminatedPayload) payload;
+                processEliminated(ep.getClientId(), ep.getClientName());
 
                 default:
                     break;
@@ -520,6 +579,39 @@ public enum Client {
         }
     }
 
+
+    public void processEliminated(long clientId, String clientName) { //cae6
+        ClientPlayer cp = knownClients.get(clientId);
+        if (cp != null) {
+            cp.setEliminated(true);
+            System.out.println(TextFX.colorize(
+                    String.format("Client %s[%s] has been eliminated", clientName, clientId),
+                    Color.RED));
+        }
+        events.forEach(event -> {
+            if (event instanceof IEliminatedEvent) {
+                ((IEliminatedEvent) event).markEliminated(clientId, clientName);
+            }
+        });
+    }
+
+    public String getClientNameFromId(long id) {
+        if (id == ClientPlayer.DEFAULT_CLIENT_ID) {
+            return "Room";
+        }
+        if (knownClients.containsKey(id)) {
+            return knownClients.get(id).getClientName();
+        }
+        return "[Unknown]";
+    }
+
+    private void processCurrentTimer(TimerType timerType, int time) { //cae6
+        events.forEach(event -> {
+            if (event instanceof ITimeEvents) {
+                ((ITimeEvents) event).onTimerUpdate(timerType, time);
+            }
+        });
+    }
     private void processTurnStatus(long clientId, boolean didTakeTurn, String choice) {
       
             ClientPlayer cp = knownClients.get(clientId);
@@ -530,13 +622,24 @@ public enum Client {
                         System.out.println(TextFX.colorize(
                                 String.format("Client %s[%s] chose %s",choice,cp.getClientName()),
                                 Color.GREEN));
+
+                                events.forEach(event -> {
+                                    if (event instanceof IMessageEvents) {
+                                        ((IMessageEvents) event).onMessageReceive(Constants.GAME_EVENT_CHANNEL,
+                                                String.format("%s[%s] finished their turn", cp.getClientName(), cp.getClientId()));
+                                    }
+                                });
                 }
             }
-      
+       events.forEach(event -> {
+            if (event instanceof ITurnEvent) {
+                ((ITurnEvent) event).onTookTurn(clientId, didTakeTurn, choice);
+            }
+        });
     }
 
    
-       private void processPoints(long clientId, int points) {
+       private void processPoints(long clientId, int points) {//cae6
        
         if (clientId == ClientPlayer.DEFAULT_CLIENT_ID) {
             // Reset points for all clients
@@ -551,6 +654,12 @@ public enum Client {
                 LoggerUtil.INSTANCE.severe(String.format("Client ID %s not found while processing points.", clientId));
             }
         }
+
+          events.forEach(event -> {
+            if (event instanceof IPointsEvent) {
+                ((IPointsEvent) event).onPointsUpdate(clientId, points);
+            }
+        });
     }
 
 
@@ -560,9 +669,14 @@ public enum Client {
     }*/
     
     
-    private void processPhase(String phase){
+    private void processPhase(String phase){//cae6
         currentPhase = Enum.valueOf(Phase.class, phase);
         System.out.println(TextFX.colorize("Current phase is " + currentPhase.name(), Color.YELLOW));
+         events.forEach(event -> {
+            if (event instanceof IPhaseEvent) {
+                ((IPhaseEvent) event).onReceivePhase(currentPhase);
+            }
+        });
     }
 
     private void processResetReady(){
@@ -582,9 +696,21 @@ public enum Client {
                     String.format("%s[%s] is %s", cp.getClientName(), cp.getClientId(),
                             isReady ? "ready" : "not ready"));
         }
+         events.forEach(event -> {
+            if (event instanceof IReadyEvent) {
+                ((IReadyEvent) event).onReceiveReady(clientId, isReady, quiet);
+            }
+        });
     }
 
-    private void processRoomsList(List<String> rooms) {
+    private void processRoomsList(List<String> rooms, String message) {
+
+          events.forEach(event -> {
+            if (event instanceof IRoomEvents) {
+                ((IRoomEvents) event).onReceiveRoomList(rooms, message);
+            }
+        });
+
         if (rooms == null || rooms.size() == 0) {
             System.out.println(
                     TextFX.colorize("No rooms found matching your query",
@@ -597,6 +723,11 @@ public enum Client {
     }
 
     private void processDisconnect(long clientId, String clientName) {
+        events.forEach(event -> {
+            if (event instanceof IConnectionEvents) {
+                ((IConnectionEvents) event).onClientDisconnect(clientId, clientName);
+            }
+        });
         System.out.println(
                 TextFX.colorize(String.format("*%s disconnected*",
                         clientId == myData.getClientId() ? "You" : clientName),
@@ -612,11 +743,21 @@ public enum Client {
             myData.setClientName(clientName);
             // knownClients.put(cp.getClientId(), myData);// <-- this is handled later
         }
+        events.forEach(event -> {
+            if (event instanceof IConnectionEvents) {
+                ((IConnectionEvents) event).onReceiveClientId(clientId);
+            }
+        });
     }
 
-    private void processMessage(long clientId, String message) {
+    private void processMessage(long clientId, String message) {//cae6
         String name = knownClients.containsKey(clientId) ? knownClients.get(clientId).getClientName() : "Room";
         System.out.println(TextFX.colorize(String.format("%s: %s", name, message), Color.BLUE));
+        events.forEach(event -> {
+            if (event instanceof IMessageEvents) {
+                ((IMessageEvents) event).onMessageReceive(clientId, message);
+            }
+        });
     }
 
     private void processClientSync(long clientId, String clientName) {
@@ -626,6 +767,11 @@ public enum Client {
             cd.setClientName(clientName);
             knownClients.put(clientId, cd);
         }
+        events.forEach(event -> {
+            if (event instanceof IConnectionEvents) {
+                ((IConnectionEvents) event).onSyncClient(clientId, clientName);
+            }
+        });
     }
 
     private void processRoomAction(long clientId, String clientName, String message, boolean isJoin) {
@@ -637,16 +783,31 @@ public enum Client {
             System.out.println(TextFX
                     .colorize(String.format("*%s[%s] joined the Room %s*", clientName, clientId, message),
                             Color.GREEN));
+                            events.forEach(event -> {
+                                if (event instanceof IRoomEvents) {
+                                    ((IRoomEvents) event).onRoomAction(clientId, clientName, message, isJoin);
+                                }
+                            });
         } else if (!isJoin) {
             ClientPlayer removed = knownClients.remove(clientId);
             if (removed != null) {
                 System.out.println(
                         TextFX.colorize(String.format("*%s[%s] left the Room %s*", clientName, clientId, message),
                                 Color.YELLOW));
-            }
+            } events.forEach(event -> {
+                if (event instanceof IRoomEvents) {
+                    ((IRoomEvents) event).onRoomAction(clientId, clientName, message, isJoin);
+                }
+            });
             // clear our list
             if (clientId == myData.getClientId()) {
                 knownClients.clear();
+
+                events.forEach(event -> {
+                    if (event instanceof IConnectionEvents) {
+                        ((IConnectionEvents) event).onResetUserList();
+                    }
+                });
             }
         }
     }
@@ -656,6 +817,7 @@ public enum Client {
 
 //./build.sh Project
 //./run.sh Project server
+//./run.sh Project ui
 //./run.sh Project client
 // /name Ali
 // /name Bil

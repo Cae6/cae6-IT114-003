@@ -13,7 +13,9 @@ public enum PayloadType {
     SYNC_READY, // quiet version of READY, used to sync existing ready status of clients in a GameRoom
     RESET_READY, // trigger to tell the client to reset their whole local list's ready status (saves network requests)
     PHASE,
+    ELIMINATED,
     CHOICE,
     TURN,
-    POINTS, // syncs current phase of session (used as a switch to only allow certain logic to execute)
+    POINTS,
+    TIME // syncs current phase of session (used as a switch to only allow certain logic to execute)
 }

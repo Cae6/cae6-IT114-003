@@ -1,17 +1,16 @@
 package Project.Server;
 
 import java.util.Arrays;
-//import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import Project.Common.LoggerUtil;
 import Project.Common.Phase;
 import Project.Common.Player;
-//import Project.Common.Player;
 import Project.Common.TextFX;
 import Project.Common.TextFX.Color;
 import Project.Common.TimedEvent;
+import Project.Common.TimerType;
 
 public class GameRoom extends BaseGameRoom {
 
@@ -28,6 +27,7 @@ public class GameRoom extends BaseGameRoom {
       sp.setClientName(sp.getClientName());
         syncCurrentPhase(sp);
         syncReadyStatus(sp);
+        sendGameEvent("Welcome to the game click ready to start");
     }
 
     @Override
@@ -37,10 +37,14 @@ public class GameRoom extends BaseGameRoom {
 
     // Timer handlers
     private void startRoundTimer() {
+        
         roundTimer = new TimedEvent(50, this::onRoundEnd); // 50 second timer
         roundTimer.setTickCallback(time -> {
-            if (time % 10 == 0 || time <= 3) { 
+            if (time % 5 == 0 || time <= 5) { 
                 sendMessage(ServerConstants.FROM_ROOM, String.format("Time remaining: %d seconds", time));
+                playersInRoom.values().forEach(player -> {
+                    ((ServerPlayer)player).sendCurrentTime(TimerType.ROUND, time);
+                });
             }
         });}
 
@@ -94,8 +98,34 @@ public class GameRoom extends BaseGameRoom {
     protected void onSessionStart() {
         LoggerUtil.INSTANCE.info("onSessionStart() start");
         changePhase(Phase.IN_PROGRESS);
+      sendGameEvent("Game has begun!, Click ready to start the game");
         LoggerUtil.INSTANCE.info("onSessionStart() end");
         onRoundStart();
+    }
+
+    private void sendGameEvent(String str) {
+        sendGameEvent(str, null);
+    }
+
+    private void sendGameEvent(String str, List<Long> targets) {
+        playersInRoom.values().removeIf(spInRoom -> {
+            boolean canSend = false;
+            if (targets != null) {
+                if (targets.contains(spInRoom.getClientId())) {
+                    canSend = true;
+                }
+            } else {
+                canSend = true;
+            }
+            if (canSend) {
+                boolean failedToSend = !spInRoom.sendGameEvent(str);
+                if (failedToSend) {
+                    removedClient(spInRoom.getServerThread());
+                }
+                return failedToSend;
+            }
+            return false;
+        });
     }
 
     @Override
@@ -123,7 +153,7 @@ public class GameRoom extends BaseGameRoom {
     
         // Transition to the TURN phase, where players make choice
         changePhase(Phase.TURN);
-        sendMessage(ServerConstants.FROM_ROOM, "Choices are: Rock (R), Paper (P), Scissors (S), or skip (skip)");
+        sendGameEvent("Choices are: Rock (R), Paper (P), Scissors (S), or skip (skip)", null);
     
         // Notify players
         sendMessage(ServerConstants.FROM_ROOM, "The round has started! Submit your choices now.");
@@ -187,7 +217,9 @@ public class GameRoom extends BaseGameRoom {
             checkPlayerTookTurn(sp);
 
             if ("skip".equalsIgnoreCase(choice)) {
-                sp.setEliminated(true); // Mark player as eliminated
+                sp.setEliminated(true);
+                sp.sendEliminated(sp.getClientId(), sp.getClientName()); // Mark player as eliminated
+                sendGameEvent(String.format("%s has been eliminated!", sp.getClientName()));
                 sendMessage(ServerConstants.FROM_ROOM, String.format("%s skipped their turn and has been eliminated!", sp.getClientName()));
                 return; // Exit as the player is no longer part of the round
             }
@@ -195,11 +227,13 @@ public class GameRoom extends BaseGameRoom {
 
             sp.setChoice(choice);
             sp.setTakeTurn(true);
+            sp.sendTurnStatus(sp.getClientId(), true, choice);
+            sendGameEvent(String.format("%s made their choice", sp.getClientName()));
 
            
 
             if (didAllTakeTurn()) {
-                sendMessage(ServerConstants.FROM_ROOM, "All players have submitted their choices!");
+                sendGameEvent("All players have submitted their choices!");
                 resetRoundTimer();
                 onRoundEnd();
 
@@ -221,12 +255,14 @@ public class GameRoom extends BaseGameRoom {
 
     private void checkPlayerIsReady(ServerPlayer sp) throws Exception {
         if (!sp.isReady()) {
+            sp.sendGameEvent("You weren't ready in time");
             throw new Exception("Player isn't ready");
         }
     }
 
     private void checkPlayerTookTurn(ServerPlayer sp) throws Exception {
         if (sp.didTakeTurn()) {
+            sp.sendGameEvent("You already took your turn");
             throw new Exception("Player already took turn");
         }
     }
@@ -266,16 +302,26 @@ public class GameRoom extends BaseGameRoom {
             if (result == 0) {
                 sendMessage(ServerConstants.FROM_ROOM, String.format("%s ties with %s [%s - %s]",
                         player1.getClientName(), player2.getClientName(), choice1, choice2));
+                sendGameEvent(String.format("%s ties with %s [%s - %s]",
+                        player1.getClientName(), player2.getClientName(), choice1, choice2));
+
             } else if (result == 1) {
                 sendMessage(ServerConstants.FROM_ROOM, String.format("%s wins against %s [%s - %s]",
                         player1.getClientName(), player2.getClientName(), choice1, choice2));
+                sendGameEvent(String.format("%s wins against %s [%s - %s]",
+                        player1.getClientName(), player2.getClientName(), choice1, choice2));
                         player1.setPoints(player1.getPoints() + 1);
+                      
                         player2.setEliminated(true); 
+                        player2.sendEliminated(player2.getClientId(), player2.getClientName());
             } else {
                 sendMessage(ServerConstants.FROM_ROOM, String.format("%s wins against %s [%s - %s]",
                         player2.getClientName(), player1.getClientName(), choice2, choice1));
+                sendGameEvent(String.format("%s wins against %s [%s - %s]",
+                        player2.getClientName(), player1.getClientName(), choice2, choice1));
                         player2.setPoints(player2.getPoints() + 1);
                         player1.setEliminated(true); 
+                        player1.sendEliminated(player1.getClientId(), player1.getClientName());
             }
         }
 
@@ -328,10 +374,13 @@ private void resetPlayer() {
 
 
 private void broadcastLeaderboard() {
-    // going in descending order
-    List<ServerPlayer> sortedPlayers = playersInRoom.values().stream()
+    // going in descending order of points
+            List<ServerPlayer> sortedPlayers = playersInRoom.values().stream()
             .sorted((p1, p2) -> Integer.compare(p2.getPoints(), p1.getPoints()))
             .toList();
+    sortedPlayers.forEach(player -> {
+        player.sendPointsUpdate(player.getClientId(), player.getPoints(), player.getClientName());
+    });
 
     // leaderboard message to all clients
     String leaderboard = "Leaderboard:\n" + sortedPlayers.stream()

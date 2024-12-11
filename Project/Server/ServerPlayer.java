@@ -2,6 +2,7 @@ package Project.Server;
 
 import Project.Common.Phase;
 import Project.Common.Player;
+import Project.Common.TimerType;
 
 /**
  * Server-only data about a player
@@ -38,12 +39,21 @@ public class ServerPlayer extends Player{
         return client.sendResetReady();
     }
 
+      public boolean sendCurrentTime(TimerType timerType, int time) {
+        return client.sendCurrentTime(timerType, time);
+    }
+
+    public boolean sendEliminated(long clientID, String clientName ) {
+        return client.sendEliminated(clientID,clientName);
+    }
+
+
     public boolean sendCurrentPhase(Phase phase){
         return client.sendCurrentPhase(phase);
     }
 
-    public boolean sendTurnStatus(long clientId, boolean didTakeTurn) {
-        return client.sendTurnStatus(clientId, didTakeTurn);
+    public boolean sendTurnStatus(long clientId, boolean didTakeTurn, String choice) {
+        return client.sendTurnStatus(clientId, didTakeTurn, choice);
     }
 
     public boolean sendChoice(String choice) {
@@ -56,5 +66,9 @@ public class ServerPlayer extends Player{
 
     public String getClientName() {
         return client.getClientName();
+    }
+
+    public boolean sendGameEvent(String message){
+        return client.sendGameEvent(message);
     }
 }
