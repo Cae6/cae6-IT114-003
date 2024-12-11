@@ -14,7 +14,11 @@ import Project.Common.TurnPayload;
 import Project.Common.Payload;
 
 import Project.Common.ConnectionPayload;
+import Project.Common.Constants;
+import Project.Common.EliminatedPayload;
 import Project.Common.LoggerUtil;
+import Project.Common.TimerPayload;
+import Project.Common.TimerType;
 
 /**
  * A server-side representation of a single client.
@@ -155,6 +159,9 @@ public class ServerThread extends BaseServerThread {
         return send(pp);
     }
 
+    public boolean sendGameEvent(String str) {
+        return sendMessage(Constants.GAME_EVENT_CHANNEL, str);
+    }
     public boolean sendChoice(String choice){
         Payload tp = new Payload();
         tp.setPayloadType(PayloadType.TURN);
@@ -162,13 +169,31 @@ public class ServerThread extends BaseServerThread {
         return send(tp);
     }
 
-    public boolean sendTurnStatus(long clientId, boolean didTakeTurn) {
+    public boolean sendTurnStatus(long clientId, boolean didTakeTurn, String choice) {
        TurnPayload tp = new TurnPayload();
         tp.setPayloadType(PayloadType.TURN);
         tp.setTakeTurn(didTakeTurn);
         tp.setClientId(clientId);
+        tp.setMessage(choice);
         return send(tp);
     }
+
+    public boolean sendEliminated(long clientID, String clientName) {
+        EliminatedPayload ep = new EliminatedPayload();
+        ep.setPayloadType(PayloadType.ELIMINATED);
+        ep.setMessage(clientName);
+        ep.setClientId(clientID);
+        return send(ep);
+    }
+
+
+    public boolean sendCurrentTime(TimerType timerType, int time) {
+        TimerPayload tp = new TimerPayload();
+        tp.setTime(time);
+        tp.setTimerType(timerType);
+        return send(tp);
+    }
+
 
     public boolean sendCurrentPhase(Phase phase){
         Payload p = new Payload();

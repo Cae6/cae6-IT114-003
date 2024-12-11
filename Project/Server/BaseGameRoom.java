@@ -5,6 +5,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import Project.Common.LoggerUtil;
 import Project.Common.Phase;
 import Project.Common.TimedEvent;
+import Project.Common.TimerType;
+
 
 /**
  * No edits should be needed in this file, this prepares the core logic for the
@@ -24,6 +26,7 @@ public abstract class BaseGameRoom extends Room {
     protected Phase currentPhase = Phase.READY;
 
     protected boolean allowToggleReady = false;
+    
 
     public BaseGameRoom(String name) {
         super(name);
@@ -121,11 +124,17 @@ public abstract class BaseGameRoom extends Room {
             resetReadyTimer();
         }
         if(readyTimer == null){
-            readyTimer = new TimedEvent(20, () -> {
+            readyTimer = new TimedEvent(10, () -> {
                 // callback to trigger when ready expires
                 checkReadyStatus();
+            
             });
-            readyTimer.setTickCallback((time)->System.out.println("Ready Timer: " + time));
+            readyTimer.setTickCallback((time) -> {
+                System.out.println("Ready Timer: " + time);
+                playersInRoom.values().forEach(player -> {
+                    ((ServerPlayer) player).sendCurrentTime(TimerType.READY, time);
+                });
+            });
         }
     }
 
