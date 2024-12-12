@@ -65,6 +65,21 @@ public class UserListItem extends JPanel {
         setTurn(didTakeTurn, Color.GREEN);
     }
 
+    public void setEliminated(boolean isEliminated){
+        setEliminated(isEliminated, Color.RED);
+    }
+
+    public void setEliminated(boolean isEliminated, Color color) {
+        if (isEliminated) {
+            this.setBackground(color); // Highlight with the specified color
+        } else {
+            this.setBackground(null); // Reset to default
+        }
+        this.repaint();
+    }
+
+    
+
    
     
     /**
@@ -72,19 +87,13 @@ public class UserListItem extends JPanel {
      * @param didTaketurn if true, applies trueColor; otherwise applies transparent
      * @param trueColor Color to apply when true
      */
-    public void setTurn(boolean didTaketurn, Color trueColor) {
-        turnIndicator.setBackground(didTaketurn ? trueColor : new Color(0, 0, 0, 0));
+    public void setTurn(boolean didTaketurn, Color GREEN) {
+        turnIndicator.setBackground(didTaketurn ? Color.GREEN : Color.YELLOW);
         repaint();
     }
 
-    public void setEliminated(boolean isEliminated) {
-        if (isEliminated) {
-            this.setBackground(Color.RED); 
-        } else {
-            this.setBackground(null); 
-        }
-        this.repaint();
-    }
+        
+    
 
     public void setPending(boolean isPending, Color YELLOW) {
         if (isPending) {
@@ -115,4 +124,6 @@ public class UserListItem extends JPanel {
         }
         repaint();
     }
+
+   
 }

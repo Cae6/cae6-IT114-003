@@ -26,6 +26,7 @@ public class GamePanel extends JPanel implements IRoomEvents, IPhaseEvent {
     private static final String READY_PANEL = "READY";
     private static final String PLAY_PANEL = "PLAY";//example panel for this lesson
     JPanel buttonPanel = new JPanel();
+   
 
     public GamePanel(ICardControls controls) {
         super(new BorderLayout());
@@ -39,8 +40,12 @@ public class GamePanel extends JPanel implements IRoomEvents, IPhaseEvent {
                 // 
                 e.printStackTrace();
             }
+            
         });
         buttonPanel.add(doSomething);
+
+          
+         
 
 
         JPanel gameContainer = new JPanel(new CardLayout());
@@ -54,6 +59,7 @@ public class GamePanel extends JPanel implements IRoomEvents, IPhaseEvent {
 
         playPanel = new JPanel();
         playPanel.setName(PLAY_PANEL);
+        JPanel buttonPanel = new JPanel();
         playPanel.add(buttonPanel);
         gameContainer.add(PLAY_PANEL, playPanel);
 
