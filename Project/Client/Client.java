@@ -23,6 +23,7 @@ import Project.Client.Interfaces.IReadyEvent;
 import Project.Client.Interfaces.IRoomEvents;
 import Project.Client.Interfaces.ITurnEvent;
 import Project.Client.Interfaces.IEliminatedEvent;
+//import Project.Client.Interfaces.ISpectatorEvent;
 import Project.Common.ConnectionPayload;
 import Project.Common.Constants;
 import Project.Common.EliminatedPayload;
@@ -32,6 +33,7 @@ import Project.Common.PayloadType;
 import Project.Common.Phase;
 import Project.Common.ReadyPayload;
 import Project.Common.RoomResultsPayload;
+import Project.Common.SpectatorPayload;
 import Project.Common.PointsPayload;
 import Project.Common.TextFX;
 import Project.Common.TurnPayload;
@@ -76,7 +78,7 @@ public enum Client {
     private final String LOGOFF = "logoff";
     private final String LOGOUT = "logout";
     private final String SINGLE_SPACE = " ";
-    // other constants
+    private final String SPECTATOR = "spectator";
     private final String READY = "ready";
     
  private static List<IClientEvents> events = new ArrayList<IClientEvents>();
@@ -266,6 +268,21 @@ public enum Client {
                     sendTurnAction(commandValue);
                     wasCommand = true;
                     break;
+                case "Spock":
+                sendTurnAction(commandValue);
+                wasCommand = true;
+                break;
+                case "Lizard":
+                sendTurnAction(commandValue);
+                wasCommand = true;
+                break;
+                case "away":
+                sendTurnAction(commandValue);
+                break;
+                case SPECTATOR:
+                sendSpectator(commandValue);
+                wasCommand = true;
+                break;
     
                 }
                 return wasCommand;
@@ -298,6 +315,7 @@ public enum Client {
         TurnPayload tp = new TurnPayload();
         tp.setPayloadType(PayloadType.TURN);
         tp.setChoice(choice);
+        tp.setIsAway(choice.equalsIgnoreCase("away"));
         send(tp);
      }
 
@@ -307,6 +325,13 @@ public enum Client {
         ReadyPayload rp = new ReadyPayload();
         rp.setReady(true); // <- techically not needed as we'll use the payload type as a trigger
         send(rp);
+    }
+
+    public void sendSpectator(String clientName) throws IOException {
+        SpectatorPayload sp= new SpectatorPayload();
+        sp.setPayloadType(PayloadType.SPECTATOR);
+        sp.setClientName(clientName);
+        send(sp);
     }
 
     /**
@@ -557,7 +582,7 @@ public enum Client {
                     break;
                 case PayloadType.TURN:
                 TurnPayload tp = (TurnPayload)payload;
-                processTurnStatus(tp.getClientId(), tp.didTakeTurn(),tp.getChoice());
+                processTurnStatus(tp.getClientId(), tp.didTakeTurn(),tp.getChoice(),tp.isAway());
                 break;
                 case PayloadType.POINTS:
                 PointsPayload pp = (PointsPayload) payload;
@@ -570,7 +595,11 @@ public enum Client {
                 case PayloadType.ELIMINATED:
                 EliminatedPayload ep = (EliminatedPayload) payload;
                 processEliminated(ep.getClientId(), ep.getClientName());
-
+                break;
+                case PayloadType.SPECTATOR:
+                SpectatorPayload sp = (SpectatorPayload) payload;
+                processSpectator(sp.getClientId(),sp.getClientName(), sp.isSpectator());
+              
                 default:
                     break;
             }
@@ -595,6 +624,8 @@ public enum Client {
         });
     }
 
+  
+
     public String getClientNameFromId(long id) {
         if (id == ClientPlayer.DEFAULT_CLIENT_ID) {
             return "Room";
@@ -612,12 +643,13 @@ public enum Client {
             }
         });
     }
-    private void processTurnStatus(long clientId, boolean didTakeTurn, String choice) {
+    private void processTurnStatus(long clientId, boolean didTakeTurn, String choice, boolean isAway) {//cae6
       
             ClientPlayer cp = knownClients.get(clientId);
             if (cp != null) {
                 cp.setTakeTurn(didTakeTurn);
                 cp.setChoice(choice);
+                cp.setIsAway(isAway);
                 if (didTakeTurn) {
                         System.out.println(TextFX.colorize(
                                 String.format("Client %s[%s] chose %s",choice,cp.getClientName()),
@@ -629,13 +661,32 @@ public enum Client {
                                                 String.format("%s[%s] finished their turn", cp.getClientName(), cp.getClientId()));
                                     }
                                 });
+                                events.forEach(event -> {
+                                    if (event instanceof ITurnEvent) {
+                                        ((ITurnEvent) event).onTookTurn(clientId, didTakeTurn, choice);
+                                    }
+                                });
                 }
+                if(isAway){
+                    System.out.println(TextFX.colorize(
+                        String.format("Client %s[%s] is away",cp.getClientName(),cp.getClientId()),
+                        Color.RED));
+                } else {
+                    System.out.println(TextFX.colorize(
+                        String.format("Client %s[%s] is back",cp.getClientName(),cp.getClientId()),
+                        Color.GREEN));
+                }
+                events.forEach(event -> {
+                    if (event instanceof IMessageEvents) {
+                        String message = isAway ? "away" : "back";
+                        ((IMessageEvents) event).onMessageReceive(Constants.GAME_EVENT_CHANNEL,
+                                String.format("%s[%s] is %s", cp.getClientName(), clientId, message));
+                    }
+                });
             }
-       events.forEach(event -> {
-            if (event instanceof ITurnEvent) {
-                ((ITurnEvent) event).onTookTurn(clientId, didTakeTurn, choice);
-            }
-        });
+            
+
+       
     }
 
    
@@ -667,6 +718,18 @@ public enum Client {
         knownClients.values().forEach(cp -> cp.setTakeTurn(false));
         System.out.println("All turns have been reset.");
     }*/
+    
+    private void processSpectator(long clientId, String clientName, boolean isSpectator) {//cae6
+        
+        
+        ClientPlayer cp = knownClients.get(clientId);
+        if (cp != null) {
+            cp.setSpectator(isSpectator);
+        }
+        
+        // Optionally, log or display a message
+        LoggerUtil.INSTANCE.info(String.format("Client %d is now a %s", clientName, isSpectator ? "spectator" : "player"));
+    }
     
     
     private void processPhase(String phase){//cae6

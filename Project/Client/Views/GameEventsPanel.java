@@ -40,7 +40,7 @@ public class GameEventsPanel extends JPanel implements IPhaseEvent, IReadyEvent,
     private JPanel content;
     private boolean debugMode = true; // Set this to false to disable debugging styling
     private JLabel timerText;
-    private JButton rockButton, paperButton, scissorsButton, skipButton;
+    private JButton rockButton, paperButton, scissorsButton,spockButton, lizardButton, skipButton, awayButton;
   
 
     // GridBagConstraints for the vertical glue
@@ -132,13 +132,20 @@ public class GameEventsPanel extends JPanel implements IPhaseEvent, IReadyEvent,
         rockButton = createChoiceButton("R");
         paperButton = createChoiceButton("P");
         scissorsButton = createChoiceButton("S");
+        spockButton = createChoiceButton("Spock");
+        lizardButton = createChoiceButton("Lizard");
         skipButton = createChoiceButton("Skip");
+        awayButton = createChoiceButton("away");
+
 
         // Adding Buttons to Panel
         buttonPanel.add(rockButton);
         buttonPanel.add(paperButton);
         buttonPanel.add(scissorsButton);
+        buttonPanel.add(spockButton);
+        buttonPanel.add(lizardButton);
         buttonPanel.add(skipButton);
+        buttonPanel.add(awayButton);
 
         add(buttonPanel, BorderLayout.SOUTH);
     }

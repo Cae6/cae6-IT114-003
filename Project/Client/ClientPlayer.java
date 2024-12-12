@@ -12,6 +12,7 @@ import Project.Common.Player;
  */
 public class ClientPlayer extends Player {
     private String clientName;
+   
 
     public String getClientName() {
         return clientName;
@@ -20,6 +21,7 @@ public class ClientPlayer extends Player {
     public void setClientName(String clientName) {
         this.clientName = clientName;
     }
+
 
     @Override
     public void reset() {
