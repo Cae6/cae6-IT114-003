@@ -47,13 +47,17 @@ public class ServerPlayer extends Player{
         return client.sendEliminated(clientID,clientName);
     }
 
+    public boolean sendSpectatorStatus(long clientId, String clientName, boolean isSpectator) {
+        return client.sendSpectatorStatus(clientId, clientName, isSpectator);
+    }
+
 
     public boolean sendCurrentPhase(Phase phase){
         return client.sendCurrentPhase(phase);
     }
 
-    public boolean sendTurnStatus(long clientId, boolean didTakeTurn, String choice) {
-        return client.sendTurnStatus(clientId, didTakeTurn, choice);
+    public boolean sendTurnStatus(long clientId, boolean didTakeTurn, String choice, boolean isAway) {
+        return client.sendTurnStatus(clientId, didTakeTurn, choice,isAway());
     }
 
     public boolean sendChoice(String choice) {

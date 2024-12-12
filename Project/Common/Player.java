@@ -12,6 +12,8 @@ public class Player {
     private int points = 0;
     private String choice;
     private String clientName;
+    private boolean isSpectator;
+    private boolean isAway = false;
 
     
     public String getClientName() {
@@ -82,6 +84,21 @@ public class Player {
 
     public void setEliminated(boolean eliminated) {
         this.eliminated = eliminated;
+    }
+    public void setSpectator(boolean spectator) {
+        this.isSpectator = spectator;
+    }
+    
+    public boolean isSpectator() {
+        return isSpectator;
+    }
+
+    public boolean isAway() {
+        return isAway;
+    }
+
+    public void setIsAway(boolean isAway) {
+        this.isAway = isAway;
     }
 
     

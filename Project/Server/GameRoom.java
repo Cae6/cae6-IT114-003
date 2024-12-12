@@ -128,6 +128,24 @@ public class GameRoom extends BaseGameRoom {
         });
     }
 
+    public void handleSpectator(ServerThread sender, boolean isSpectator) {// cae6
+        try {
+            ServerPlayer sp = (ServerPlayer) playersInRoom.get(sender.getClientId());
+            if (sp == null) {
+                sender.sendMessage("Error: Player not found in room");
+                return;
+            }
+
+            sp.setSpectator(isSpectator);
+            sp.sendSpectatorStatus(sp.getClientId(), sp.getClientName(), isSpectator);
+            sendGameEvent(String.format("%s is now a %s", sp.getClientName(), isSpectator ? "spectator" : "player"));
+
+        } catch (Exception e) {
+            sender.sendMessage("Error processing spectator status: " + e.getMessage());
+            LoggerUtil.INSTANCE.severe("Error in handleSpectator", e);
+        }
+    }
+
     @Override
     protected void onRoundStart() {
         LoggerUtil.INSTANCE.info("onRoundStart() start");
@@ -135,6 +153,8 @@ public class GameRoom extends BaseGameRoom {
         // Reset player states for the new round
         resetReadyStatus();
 
+
+        resetPlayerChoices();
         resetPlayer();
         changePhase(Phase.READY);
     
@@ -197,6 +217,7 @@ public class GameRoom extends BaseGameRoom {
         LoggerUtil.INSTANCE.info("onSessionEnd() start");
         resetReadyStatus();
         changePhase(Phase.READY);
+
         LoggerUtil.INSTANCE.info("onSessionEnd() end");
     }
 
@@ -204,7 +225,7 @@ public class GameRoom extends BaseGameRoom {
         return playersInRoom.values().stream().allMatch(ServerPlayer::isReady);
     }
 
-    public void handleTurn(ServerThread sender, String choice){
+    public void handleTurn(ServerThread sender, String choice, boolean isAway) {
         try {
             ServerPlayer sp = (ServerPlayer) playersInRoom.get(sender.getClientId());
             if (sp == null) {
@@ -215,6 +236,7 @@ public class GameRoom extends BaseGameRoom {
 
             checkPlayerIsReady(sp);
             checkPlayerTookTurn(sp);
+            
 
             if ("skip".equalsIgnoreCase(choice)) {
                 sp.setEliminated(true);
@@ -223,11 +245,22 @@ public class GameRoom extends BaseGameRoom {
                 sendMessage(ServerConstants.FROM_ROOM, String.format("%s skipped their turn and has been eliminated!", sp.getClientName()));
                 return; // Exit as the player is no longer part of the round
             }
+
+            if("away".equalsIgnoreCase(choice)){
+                sp.setIsAway(true);
+                sp.sendTurnStatus(sp.getClientId(), true, choice, isAway);
+                sendGameEvent(String.format("%s is now away", sp.getClientName())); // cae6
+                sendMessage(ServerConstants.FROM_ROOM, String.format("%s has marked themselves as away.", sp.getClientName())); 
+            
+                
+                return;
+               
+            }
     
 
             sp.setChoice(choice);
             sp.setTakeTurn(true);
-            sp.sendTurnStatus(sp.getClientId(), true, choice);
+            sp.sendTurnStatus(sp.getClientId(), true, choice, isAway);
             sendGameEvent(String.format("%s made their choice", sp.getClientName()));
 
            
@@ -247,8 +280,8 @@ public class GameRoom extends BaseGameRoom {
     }
 
     private boolean didAllTakeTurn() {
-        long ready = playersInRoom.values().stream().filter(p -> p.isReady()&& !p.isEliminated()).count();
-        long tookTurn = playersInRoom.values().stream().filter(p -> p.isReady() && p.didTakeTurn()&& !p.isEliminated()).count();
+        long ready = playersInRoom.values().stream().filter(p -> p.isReady()&& !p.isEliminated() && !p.isAway()).count();
+        long tookTurn = playersInRoom.values().stream().filter(p -> p.isReady() && p.didTakeTurn()&& !p.isEliminated() && !p.isAway()).count();
         LoggerUtil.INSTANCE.info(String.format("didAllTakeTurn() %s/%s", tookTurn, ready));
         return ready == tookTurn;
     }
@@ -279,7 +312,7 @@ public class GameRoom extends BaseGameRoom {
 
         //players choices before processing 
         List<ServerPlayer> playersToProcess = playersInRoom.values().stream()
-        .filter(player -> player.isReady() && player.didTakeTurn() && player.getChoice() != null&& !player.isEliminated())
+        .filter(player -> player.isReady() && player.didTakeTurn() && player.getChoice() != null&& !player.isEliminated() && !player.isAway())
         .toList();
 
     if (playersToProcess.isEmpty()) {
@@ -336,7 +369,7 @@ public class GameRoom extends BaseGameRoom {
     }
 
    private int checkMatch(String choice1, String choice2) {
-    List<String> c = Arrays.asList("R", "P", "S");
+    List<String> c = Arrays.asList("R", "P", "S", "Spock","Lizard");//cae6
     int a = c.indexOf(choice1);
     int b = c.indexOf(choice2);
 
@@ -346,7 +379,7 @@ public class GameRoom extends BaseGameRoom {
         // Tie
         return 0;
     }
-    if ((a - b + 3) % 3 == 1) {
+    if ((a - b + 5) % 5 == 1 || (a - b + 5) % 5 == 3){
         // Win
         return 1;
     }

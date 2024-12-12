@@ -4,6 +4,7 @@ public class TurnPayload extends Payload {
     private long clientId; 
     private String choice; 
     private boolean takeTurn;
+    private boolean isAway;  
    
 
     public TurnPayload(){
@@ -34,5 +35,13 @@ public class TurnPayload extends Payload {
 
     public void setChoice(String choice) {
         this.choice = choice;
+    }
+
+    public boolean isAway() {
+        return isAway;
+    }
+
+    public void setIsAway(boolean isAway) {
+        this.isAway = isAway;
     }
 }

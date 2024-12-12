@@ -147,21 +147,32 @@ public class UserListPanel extends JPanel implements IReadyEvent, IPointsEvent, 
     }
 
 
-private void updateUsers() {//cae6
+
+
+// Call this method after any points update
+
+@Override
+public void onPointsUpdate(long clientId, int points) {
     SwingUtilities.invokeLater(() -> {
-        // Convert map values to list for sorting
+        // If clientId is valid, update their points
+        if (userItemsMap.containsKey(clientId)) {
+            UserListItem userItem = userItemsMap.get(clientId);
+            userItem.setPoints(points); // Update the points of the specific user
+        } else if (clientId <= ClientPlayer.DEFAULT_CLIENT_ID) {
+            // If clientId is a special identifier (e.g., default player), hide all points
+            userItemsMap.values().forEach(u -> u.setPoints(-1));
+        }
+
+        // After updating points, sort the list of users based on points (descending) and name
         List<UserListItem> items = new ArrayList<>(userItemsMap.values());
-        
-        // Sort by points (descending) then by name
         Collections.sort(items, (a, b) -> {
-            int pointCompare = Integer.compare(b.getPoints(), a.getPoints());
+            int pointCompare = Integer.compare(b.getPoints(), a.getPoints()); // Sort by points (descending)
             if (pointCompare != 0) return pointCompare;
-            return a.getClientName().compareToIgnoreCase(b.getClientName());
-            
+            return a.getClientName().compareToIgnoreCase(b.getClientName()); // Sort by name (alphabetically)
         });
 
-        // Clear and re-add in sorted order
-        userListArea.removeAll();
+        // Reorder the users in the panel according to the sorted order
+        userListArea.removeAll(); // Clear the current list
         for (int i = 0; i < items.size(); i++) {
             UserListItem item = items.get(i);
             GridBagConstraints gbc = new GridBagConstraints();
@@ -173,30 +184,15 @@ private void updateUsers() {//cae6
             userListArea.add(item, gbc);
         }
 
-        //
+        // Add the vertical glue back to keep the layout correct
         userListArea.add(Box.createVerticalGlue(), lastConstraints);
+
+        // Revalidate and repaint the user list area to apply changes
         userListArea.revalidate();
         userListArea.repaint();
-           
     });
 }
 
-// Call this method after any points update
-@Override
-public void onPointsUpdate(long clientId, int points) {
-    if (userItemsMap.containsKey(clientId)) { //cae6
-        SwingUtilities.invokeLater(() -> {
-            if (clientId > ClientPlayer.DEFAULT_CLIENT_ID) {
-                userItemsMap.get(clientId).setPoints(points);
-            } else {
-                userItemsMap.values().forEach(u -> u.setPoints(-1));
-            }
-          
-            updateUsers();
-
-        });
-    }
-}
 
     /**
      * Adjusts the width of all user list items.
@@ -244,29 +240,27 @@ public void onPointsUpdate(long clientId, int points) {
         });
     }
 
-@Override
-public void onTookTurn(long clientId, boolean didTakeTurn, String choice) {//CAE6
-    SwingUtilities.invokeLater(() -> {
-        if (clientId == ClientPlayer.DEFAULT_CLIENT_ID) {
-            // Reset all users to pending
-            userItemsMap.values().forEach(user -> {
-                user.setTurn(false);   // Reset turn state
-                user.setPending(true, Color.YELLOW); // Mark all as pending
-            });
-        } else if (userItemsMap.containsKey(clientId)) {
-            // Update the specific user
-            UserListItem userItem = userItemsMap.get(clientId);
-            if (userItem != null) {
-                userItem.setPending(!didTakeTurn, Color.YELLOW); // Pending state depends on turn
-                userItem.setTurn(didTakeTurn);     // Update turn state
+    @Override
+    public void onTookTurn(long clientId, boolean didTakeTurn, String choice) {
+        SwingUtilities.invokeLater(() -> {
+            // Check if the user exists in the map
+            if (userItemsMap.containsKey(clientId)) {
+                UserListItem userItem = userItemsMap.get(clientId);
+    
+                // Set the turn status for the user
+                userItem.setTurn(didTakeTurn);
+               
+    
+                // Optionally, update the user's turn indicator color based on choice
+                if (didTakeTurn) {
+                    userItem.setTurn(true, Color.GREEN); 
+                } else {
+                    userItem.setTurn(false, Color.YELLOW); 
+                }
             }
-        }
-        // Always refresh the UI after updates
-       
-         // Additional updates (if needed)
-    });
-}
-
+        });
+    }
+    
 
 @Override
     public void markEliminated(long clientId, String clientName) {
@@ -276,6 +270,7 @@ public void onTookTurn(long clientId, boolean didTakeTurn, String choice) {//CAE
                 userItem.setEliminated(true);
                 userItem.setBackground(Color.RED);
             }
+            userListArea.repaint();
               
         });
         

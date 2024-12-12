@@ -15,6 +15,7 @@ public enum PayloadType {
     PHASE,
     ELIMINATED,
     CHOICE,
+    SPECTATOR,
     TURN,
     POINTS,
     TIME // syncs current phase of session (used as a switch to only allow certain logic to execute)

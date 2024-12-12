@@ -19,6 +19,7 @@ import Project.Common.EliminatedPayload;
 import Project.Common.LoggerUtil;
 import Project.Common.TimerPayload;
 import Project.Common.TimerType;
+import Project.Common.SpectatorPayload;
 
 /**
  * A server-side representation of a single client.
@@ -135,12 +136,22 @@ public class ServerThread extends BaseServerThread {
                         try {
                             TurnPayload turnPayload = (TurnPayload) payload; 
                            String choice = turnPayload.getChoice(); 
+                           boolean isAway = turnPayload.isAway();
                             // cast to GameRoom as the subclass will handle all Game logic
-                            ((GameRoom) currentRoom).handleTurn(this, choice);
+                            ((GameRoom) currentRoom).handleTurn(this, choice, isAway);
                     } catch (Exception e) {
                         sendMessage("You must be in a GameRoom to do the example turn");
                     }
                     break;
+                    case SPECTATOR:
+                        try {
+                            SpectatorPayload sp = (SpectatorPayload) payload;
+                            // cast to GameRoom as the subclass will handle all Game logic
+                            ((GameRoom) currentRoom).handleSpectator(this, sp.isSpectator());
+                        } catch (Exception e) {
+                            sendMessage("You must be in a GameRoom to do the spectator check");
+                        }
+                        break;
                 default:
                     break;
             }
@@ -169,12 +180,13 @@ public class ServerThread extends BaseServerThread {
         return send(tp);
     }
 
-    public boolean sendTurnStatus(long clientId, boolean didTakeTurn, String choice) {
+    public boolean sendTurnStatus(long clientId, boolean didTakeTurn, String choice, boolean isAway) {
        TurnPayload tp = new TurnPayload();
         tp.setPayloadType(PayloadType.TURN);
         tp.setTakeTurn(didTakeTurn);
         tp.setClientId(clientId);
         tp.setMessage(choice);
+        tp.setIsAway(isAway);
         return send(tp);
     }
 
@@ -184,6 +196,14 @@ public class ServerThread extends BaseServerThread {
         ep.setMessage(clientName);
         ep.setClientId(clientID);
         return send(ep);
+    }
+
+    public boolean sendSpectatorStatus(long clientId, String clientName, boolean isSpectator) {
+        SpectatorPayload sp = new SpectatorPayload();
+        sp.setClientId(clientId);
+        sp.setClientName(clientName);
+        sp.setMessage(Boolean.toString(isSpectator));
+        return send(sp);
     }
 
 
